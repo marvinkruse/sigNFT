@@ -14,7 +14,7 @@ contract sigNFT is OwnableUpgradeable {
     // Stores the actual signature together with the signers address
     struct Signature {
         address signer;
-        string message;
+        bytes signature;
     }
 
     // Stores whether a whitelist has been toggled, to differentiate between
@@ -46,8 +46,15 @@ contract sigNFT is OwnableUpgradeable {
     // signNFT allows people to attach a signed message to an NFT token
     // They have to be either whitelisted (if the token works with a whitelist)
     // or everyone can sign if it's not a token using a whitelist
-    function signNFT(address _tokenAddress, uint256 _tokenID, string memory _message, bytes memory _signature) public {
+    function signNFT(address _tokenAddress, uint256 _tokenID, bytes memory _signature) public {
         IERC721 erc721 = IERC721(_tokenAddress);
+
+        // Check the signature
+        bytes32 messageHash = keccak256(abi.encodePacked("This NFT was signed on sigNFT!"));
+        address signer = messageHash.recover(_signature);
+
+        // Users can only sign an NFT once
+        require(!hasSignedNFT[_tokenAddress][signer][_tokenID], "Already signed by sender");
         
         // Check whether the token really exists (done in the ownerOf call)
         require(erc721.ownerOf(_tokenID) != address(0), "Token doesn't exist");
@@ -57,7 +64,7 @@ contract sigNFT is OwnableUpgradeable {
         // b) the whitelist has been toggled to off
         // c) the whitelist was never toggled and is off by default
         require(
-                whitelistedSigner[_tokenAddress][_tokenID][msg.sender] ||
+                whitelistedSigner[_tokenAddress][_tokenID][signer] ||
                 (tokenIsUsingWhitelist[_tokenAddress][_tokenID].toggled && 
                 !tokenIsUsingWhitelist[_tokenAddress][_tokenID].whitelist) ||
                 (!tokenIsUsingWhitelist[_tokenAddress][_tokenID].toggled &&
@@ -65,37 +72,41 @@ contract sigNFT is OwnableUpgradeable {
                 "Not autorized to sign"
         );
 
-        // Users can only sign an NFT once
-        require(!hasSignedNFT[_tokenAddress][msg.sender][_tokenID], "Already signed by sender");
-
-        // Empty Message doesn't work
-        require(bytes(_message).length > 0, "Empty message");
-        
-        // Verify that the signature matches the sender
-        bytes32 messageHash = keccak256(abi.encodePacked(_message));
-        require(messageHash.recover(_signature) == msg.sender, "Invalid Signature");
-
-        // Store the message and the signature
-        Signature memory newSignature = Signature(msg.sender, _message);
+        // Store the signer and the signature
+        Signature memory newSignature = Signature(signer, _signature);
         signatures[_tokenAddress][_tokenID].push(newSignature);
-        signatureIndexOfSigner[_tokenAddress][_tokenID][msg.sender] = signatures[_tokenAddress][_tokenID].length - 1;
-        hasSignedNFT[_tokenAddress][msg.sender][_tokenID] = true;
+        signatureIndexOfSigner[_tokenAddress][_tokenID][signer] = signatures[_tokenAddress][_tokenID].length - 1;
+        hasSignedNFT[_tokenAddress][signer][_tokenID] = true;
     }
 
-    // getSignatures returns all signers and their messages of a token
-    function getSignatures(address _tokenAddress, uint256 _tokenID) public view returns(address[] memory signers, string[] memory messages) {
+    // getSigners returns all signers of a token
+    function getSigners(address _tokenAddress, uint256 _tokenID) public view returns(address[] memory signersOfToken) {
         IERC721 erc721 = IERC721(_tokenAddress);
         require(erc721.ownerOf(_tokenID) != address(0), "Token doesn't exist");
 
-        signers = new address[](signatures[_tokenAddress][_tokenID].length);
-        messages = new string[](signatures[_tokenAddress][_tokenID].length);
+        signersOfToken = new address[](signatures[_tokenAddress][_tokenID].length);
 
         for(uint256 i = 0; i < signatures[_tokenAddress][_tokenID].length; i++) {
-            signers[i] = signatures[_tokenAddress][_tokenID][i].signer;
-            messages[i] = signatures[_tokenAddress][_tokenID][i].message;
+            signersOfToken[i] = signatures[_tokenAddress][_tokenID][i].signer;
         }
 
-        return (signers, messages);
+        return signersOfToken;
+    }
+
+    // getSignatures returns all signers of a token with their signatures
+    function getSignatures(address _tokenAddress, uint256 _tokenID) public view returns(address[] memory signersOfToken, bytes[] memory signaturesOfToken) {
+        IERC721 erc721 = IERC721(_tokenAddress);
+        require(erc721.ownerOf(_tokenID) != address(0), "Token doesn't exist");
+
+        signersOfToken = new address[](signatures[_tokenAddress][_tokenID].length);
+        signaturesOfToken = new bytes[](signatures[_tokenAddress][_tokenID].length);
+
+        for(uint256 i = 0; i < signatures[_tokenAddress][_tokenID].length; i++) {
+            signersOfToken[i] = signatures[_tokenAddress][_tokenID][i].signer;
+            signaturesOfToken[i] = signatures[_tokenAddress][_tokenID][i].signature;
+        }
+
+        return (signersOfToken, signaturesOfToken);
     }
 
     // Adds people to the whitelist of the token
