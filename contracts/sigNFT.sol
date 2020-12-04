@@ -2,17 +2,17 @@
 pragma solidity ^0.6.12;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/math/SafeMath.sol";
 
-contract sigNFT is ERC721 {
+contract sigNFT is ERC721Upgradeable {
     using SafeMath for uint256;
     using ECDSA for bytes32;
 
     struct Signature {
         address signer;
         string message;
-        bytes signature;
     }
 
     mapping (uint256 => Signature[]) internal signatures;
@@ -21,7 +21,9 @@ contract sigNFT is ERC721 {
     mapping (uint256 => mapping (address => bool)) internal whitelistedSigner;
     mapping (uint256 => bool) internal tokenIsUsingWhitelist;
 
-    constructor() public ERC721("sigNFT", "sNFT") {}
+    function initialize() initializer public {
+        __ERC721_init("sigNFT", "sigNFT");
+    }
 
     function signNFT(uint256 _tokenID, string memory _message, bytes memory _signature) public {
         require(_exists(_tokenID), "Token doesn't exist");
@@ -32,7 +34,7 @@ contract sigNFT is ERC721 {
         bytes32 messageHash = keccak256(abi.encodePacked(_message));
         require(messageHash.recover(_signature) == msg.sender, "Invalid Signature");
 
-        Signature memory newSignature = Signature(msg.sender, _message, _signature);
+        Signature memory newSignature = Signature(msg.sender, _message);
         signatures[_tokenID].push(newSignature);
         signatureIndexOfSigner[_tokenID][msg.sender] = signatures[_tokenID].length - 1;
         hasSignedNFT[msg.sender][_tokenID] = true;
