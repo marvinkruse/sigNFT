@@ -62,16 +62,25 @@ contract sigNFT is OwnableUpgradeable {
     function signNFT(address _tokenContractAddress, uint256 _tokenID, address _signer, bytes memory _signature) public {
         IERC721 erc721 = IERC721(_tokenContractAddress);
 
-        // Check the signature
-        bytes32 messageHash = keccak256(abi.encodePacked("This NFT (ID: ", _tokenID, ", Contract: ", _tokenContractAddress, ") was signed by ", _signer, " on sigNFT!"));
+        // Check whether the signature matches and whether the signed message is correct, e.g.:
+        // This NFT (ID: 18756, Contract: 0x0123012301012301230101230123010123012301) was signed by 0x5123012301012301230101230123010123012301 on sigNFT!
+        // to protect from replaying the signature
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "This NFT (ID: ",
+            _tokenID, 
+            ", Contract: ", 
+            _tokenContractAddress, 
+            ") was signed by ", 
+            _signer, 
+            " on sigNFT!"));
         address signer = messageHash.recover(_signature);
-        require(signer == _signer, "Wrong signature");
+        require(signer == _signer, "SIGNFT/WRONG-SIGNATURE");
 
         // Users can only sign an NFT once
-        require(!hasSignedNFT[_tokenContractAddress][_tokenID][signer], "Already signed by sender");
+        require(!hasSignedNFT[_tokenContractAddress][_tokenID][signer], "SIGNFT/ALREADY-SIGNED");
         
         // Check whether the token really exists (done in the ownerOf call)
-        require(erc721.ownerOf(_tokenID) != address(0), "Token doesn't exist");
+        require(erc721.ownerOf(_tokenID) != address(0), "SIGNFT/TOKEN-DOESNT-EXIST");
         
         // Check whether the signer authorized
         require(
@@ -89,7 +98,7 @@ contract sigNFT is OwnableUpgradeable {
                 // The user or signer is a tokenDelegate
                 (tokenDelegate[_tokenContractAddress][_tokenID][signer] ||
                 tokenDelegate[_tokenContractAddress][_tokenID][msg.sender]),
-                "Not autorized to sign"
+                "SIGNFT/NOT-AUTHORIZED-TO-SIGN"
         );
 
         // Store the signer and the signature
@@ -126,20 +135,26 @@ contract sigNFT is OwnableUpgradeable {
     // Adds people to the whitelist of the token
     function addToWhiteList(address _tokenContractAddress, uint256 _tokenID, address[] memory _whitelistedSigners) public {
         require(
+                // The whitelist has been toggled off OR
                 (tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].toggled && 
                 tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].whitelist) ||
+                // The whitelist is off by default and not toggled on
                 (!tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].toggled &&
                 whitelistIsDefault[_tokenContractAddress]),
-                "Whitelist is not active"
+                "SIGNFT/WHITELIST-NOT-ACTIVE"
         );
 
         // This can either be done if you are the owner of the token (if token contract is not controlled by
         // a controller), or by the controller
         if(notDelegated[_tokenContractAddress]) {
             IERC721 erc721 = IERC721(_tokenContractAddress);
-            require(erc721.ownerOf(_tokenID) == msg.sender, "Can't modify whitelist of other tokens");
+            require(erc721.ownerOf(_tokenID) == msg.sender, "SIGNFT/ONLY-CURRENT-TOKEN-OWNER");
         } else {
-            require(contractDelegate[_tokenContractAddress][msg.sender], "Only controllers are allowed to modify the whitelist");
+            require(
+                contractDelegate[_tokenContractAddress][msg.sender] || 
+                tokenDelegate[_tokenContractAddress][_tokenID][msg.sender], 
+                "SIGNFT/ONLY-DELEGATE"
+            );
         }
 
         for(uint256 i = 0; i < _whitelistedSigners.length; i++) { 
@@ -150,20 +165,26 @@ contract sigNFT is OwnableUpgradeable {
     // Removes people from the whitelist of the token
     function removeFromWhitelist(address _tokenContractAddress, uint256 _tokenID, address[] memory _whitelistedSigners) public {
         require(
+                // The whitelist has been toggled off OR
                 (tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].toggled && 
                 tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].whitelist) ||
+                // The whitelist is off by default and not toggled on
                 (!tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].toggled &&
                 whitelistIsDefault[_tokenContractAddress]),
-                "Whitelist is not active"
+                "SIGNFT/WHITELIST-NOT-ACTIVE"
         );
 
         // This can either be done if you are the owner of the token (if token contract is not controlled by
         // a controller), or by the controller
         if(notDelegated[_tokenContractAddress]) {
             IERC721 erc721 = IERC721(_tokenContractAddress);
-            require(erc721.ownerOf(_tokenID) == msg.sender, "Can't modify whitelist of other tokens");
+            require(erc721.ownerOf(_tokenID) == msg.sender, "SIGNFT/ONLY-CURRENT-TOKEN-OWNER");
         } else {
-            require(contractDelegate[_tokenContractAddress][msg.sender], "Only controllers are allowed to modify the whitelist");
+            require(
+                contractDelegate[_tokenContractAddress][msg.sender] || 
+                tokenDelegate[_tokenContractAddress][_tokenID][msg.sender], 
+                "SIGNFT/ONLY-DELEGATE"
+            );
         }
 
         for(uint256 i = 0; i < _whitelistedSigners.length; i++) { 
@@ -177,9 +198,13 @@ contract sigNFT is OwnableUpgradeable {
     function activateWhitelist(address _tokenContractAddress, uint256 _tokenID) public {
         if(notDelegated[_tokenContractAddress]) {
             IERC721 erc721 = IERC721(_tokenContractAddress);
-            require(erc721.ownerOf(_tokenID) == msg.sender, "Can't modify whitelist of other tokens");
+            require(erc721.ownerOf(_tokenID) == msg.sender, "SIGNFT/ONLY-CURRENT-TOKEN-OWNER");
         } else {
-            require(contractDelegate[_tokenContractAddress][msg.sender], "Only controllers are allowed to modify the whitelist");
+            require(
+                contractDelegate[_tokenContractAddress][msg.sender] || 
+                tokenDelegate[_tokenContractAddress][_tokenID][msg.sender], 
+                "SIGNFT/ONLY-DELEGATE"
+            );
         }
 
         tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].toggled = true;
@@ -192,9 +217,13 @@ contract sigNFT is OwnableUpgradeable {
     function deactivateWhitelist(address _tokenContractAddress, uint256 _tokenID) public {
         if(notDelegated[_tokenContractAddress]) {
             IERC721 erc721 = IERC721(_tokenContractAddress);
-            require(erc721.ownerOf(_tokenID) == msg.sender, "Can't modify whitelist of other tokens");
+            require(erc721.ownerOf(_tokenID) == msg.sender, "SIGNFT/ONLY-CURRENT-TOKEN-OWNER");
         } else {
-            require(contractDelegate[_tokenContractAddress][msg.sender], "Only controllers are allowed to modify the whitelist");
+            require(
+                contractDelegate[_tokenContractAddress][msg.sender] || 
+                tokenDelegate[_tokenContractAddress][_tokenID][msg.sender], 
+                "SIGNFT/ONLY-DELEGATE"
+            );
         }
 
         tokenIsUsingWhitelist[_tokenContractAddress][_tokenID].toggled = true;
@@ -212,7 +241,7 @@ contract sigNFT is OwnableUpgradeable {
 
         if(_contractDelegates.length > 0){
             for(uint256 i = 0; i < _contractDelegates.length; i++) {
-                require(_contractDelegates[i] != msg.sender, "Can't set yourself as a controller");
+                require(_contractDelegates[i] != msg.sender, "SIGNFT/CANT-BE-DELEGATE-YOURSELF");
                 contractDelegate[_tokenContractAddress][_contractDelegates[i]] = true;
             }
         } else {
@@ -224,7 +253,7 @@ contract sigNFT is OwnableUpgradeable {
 
     // Adds delegates for a token contract
     function addContractDelegates(address _tokenContractAddress, address[] memory _contractDelegates) public {
-        require(contractDelegate[_tokenContractAddress][msg.sender] || owner() == msg.sender, "Not allowed to modify controllers");
+        require(contractDelegate[_tokenContractAddress][msg.sender] || owner() == msg.sender, "SIGNFT/NOT-A-CONTRACT-DELEGATE");
         for(uint256 i = 0; i < _contractDelegates.length; i++) {
                 contractDelegate[_tokenContractAddress][_contractDelegates[i]] = true;
         }
@@ -232,7 +261,7 @@ contract sigNFT is OwnableUpgradeable {
 
     // Removes delegates of a token contract
     function removeContractDelegates(address _tokenContractAddress, address[] memory _contractDelegates) public {
-        require(contractDelegate[_tokenContractAddress][msg.sender] || owner() == msg.sender, "Not allowed to modify controllers");
+        require(contractDelegate[_tokenContractAddress][msg.sender] || owner() == msg.sender, "SIGNFT/NOT-A-CONTRACT-DELEGATE");
         for(uint256 i = 0; i < _contractDelegates.length; i++) {
                 contractDelegate[_tokenContractAddress][_contractDelegates[i]] = false;
         }
@@ -240,14 +269,14 @@ contract sigNFT is OwnableUpgradeable {
 
     // Change the default whitelist setting for a token contract
     function changeWhitelistDefault(address _tokenContractAddress, bool _whitelistAsDefault) public {
-        require(contractDelegate[_tokenContractAddress][msg.sender] || owner() == msg.sender, "Not allowed to modify whitelist default setting");
+        require(contractDelegate[_tokenContractAddress][msg.sender] || owner() == msg.sender, "SIGNFT/NOT-A-CONTRACT-DELEGATE");
         whitelistIsDefault[_tokenContractAddress] = _whitelistAsDefault;
     }
 
     // Adds delegates for tokens
     function addTokenDelegate(address _tokenContractAddress, uint256[] memory _tokenIDs, address[] memory _tokenDelegates) public {
-        require(contractDelegate[_tokenContractAddress][msg.sender], "Not allowed to modify controllers");
-        require(_tokenIDs.length == _tokenDelegates.length, "Array length mismatch");
+        require(contractDelegate[_tokenContractAddress][msg.sender], "SIGNFT/NOT-A-CONTRACT-DELEGATE");
+        require(_tokenIDs.length == _tokenDelegates.length, "SIGNFT/ARRAY-LENGTH-MISMATCH");
 
         for(uint256 i = 0; i < _tokenDelegates.length; i++) {
                 tokenDelegate[_tokenContractAddress][_tokenIDs[i]][_tokenDelegates[i]] = true;
@@ -256,8 +285,8 @@ contract sigNFT is OwnableUpgradeable {
 
     // Remove delegates of tokens
     function removeTokenDelegate(address _tokenContractAddress, uint256[] memory _tokenIDs, address[] memory _tokenDelegates) public {
-        require(contractDelegate[_tokenContractAddress][msg.sender], "Not allowed to modify controllers");
-        require(_tokenIDs.length == _tokenDelegates.length, "Array length mismatch");
+        require(contractDelegate[_tokenContractAddress][msg.sender], "SIGNFT/NOT-A-CONTRACT-DELEGATE");
+        require(_tokenIDs.length == _tokenDelegates.length, "SIGNFT/ARRAY-LENGTH-MISMATCH");
 
         for(uint256 i = 0; i < _tokenDelegates.length; i++) {
                 tokenDelegate[_tokenContractAddress][_tokenIDs[i]][_tokenDelegates[i]] = false;
