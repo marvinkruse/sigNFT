@@ -27,7 +27,7 @@ contract sigNFT is OwnableUpgradeable {
     // Signatures
     mapping (address => mapping (uint256 => Signature[])) internal signatures;
     mapping (address => mapping (uint256 => mapping (address => uint256))) internal signatureIndexOfSigner;
-    mapping (address => mapping (address => mapping (uint256 => bool))) internal hasSignedNFT;
+    mapping (address => mapping (uint256 => mapping (address => bool))) internal hasSignedNFT;
 
     // Whitelisting
     mapping (address => bool) internal whitelistIsDefault;
@@ -43,7 +43,7 @@ contract sigNFT is OwnableUpgradeable {
         OwnableUpgradeable.__Ownable_init();
     }
 
-    // signNFT allows people to attach a signed message to an NFT token
+    // signNFT allows people to attach a signatures to an NFT token
     // They have to be either whitelisted (if the token works with a whitelist)
     // or everyone can sign if it's not a token using a whitelist
     function signNFT(address _tokenAddress, uint256 _tokenID, bytes memory _signature) public {
@@ -54,14 +54,14 @@ contract sigNFT is OwnableUpgradeable {
         address signer = messageHash.recover(_signature);
 
         // Users can only sign an NFT once
-        require(!hasSignedNFT[_tokenAddress][signer][_tokenID], "Already signed by sender");
+        require(!hasSignedNFT[_tokenAddress][_tokenID][signer], "Already signed by sender");
         
         // Check whether the token really exists (done in the ownerOf call)
         require(erc721.ownerOf(_tokenID) != address(0), "Token doesn't exist");
         
-        // Check whether the user is
+        // Check whether the signer is
         // a) whitelisted OR
-        // b) the whitelist has been toggled to off
+        // b) the whitelist has been toggled to off OR
         // c) the whitelist was never toggled and is off by default
         require(
                 whitelistedSigner[_tokenAddress][_tokenID][signer] ||
@@ -76,7 +76,7 @@ contract sigNFT is OwnableUpgradeable {
         Signature memory newSignature = Signature(signer, _signature);
         signatures[_tokenAddress][_tokenID].push(newSignature);
         signatureIndexOfSigner[_tokenAddress][_tokenID][signer] = signatures[_tokenAddress][_tokenID].length - 1;
-        hasSignedNFT[_tokenAddress][signer][_tokenID] = true;
+        hasSignedNFT[_tokenAddress][_tokenID][signer] = true;
     }
 
     // getSigners returns all signers of a token
@@ -195,6 +195,7 @@ contract sigNFT is OwnableUpgradeable {
     // by default or not
     function activateContract(address _tokenAddress, address[] memory _tokenControllers, bool _whitelistAsDefault) public onlyOwner() {
         contractActive[_tokenAddress] = true;
+
         if(_tokenControllers.length > 0){
             for(uint256 i = 0; i < _tokenControllers.length; i++) {
                 require(_tokenControllers[i] != msg.sender, "Can't set yourself as a controller");
@@ -221,5 +222,11 @@ contract sigNFT is OwnableUpgradeable {
         for(uint256 i = 0; i < _tokenControllers.length; i++) {
                 contractController[_tokenAddress][_tokenControllers[i]] = false;
         }
+    }
+
+    // Change the default whitelist setting for a token contract
+    function changeWhitelistDefault(address _tokenAddress, bool _whitelistAsDefault) public {
+        require(contractController[_tokenAddress][msg.sender] || owner() == msg.sender, "Not allowed to modify whitelist default setting");
+        whitelistIsDefault[_tokenAddress] = _whitelistAsDefault;
     }
 }
