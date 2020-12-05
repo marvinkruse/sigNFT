@@ -59,12 +59,13 @@ contract sigNFT is OwnableUpgradeable {
     // signNFT allows people to attach a signatures to an NFT token
     // They have to be either whitelisted (if the token works with a whitelist)
     // or everyone can sign if it's not a token using a whitelist
-    function signNFT(address _tokenContractAddress, uint256 _tokenID, bytes memory _signature) public {
+    function signNFT(address _tokenContractAddress, uint256 _tokenID, address _signer, bytes memory _signature) public {
         IERC721 erc721 = IERC721(_tokenContractAddress);
 
         // Check the signature
-        bytes32 messageHash = keccak256(abi.encodePacked("This NFT was signed on sigNFT!"));
+        bytes32 messageHash = keccak256(abi.encodePacked("This NFT (ID: ", _tokenID, ", Contract: ", _tokenContractAddress, ") was signed by ", _signer, " on sigNFT!"));
         address signer = messageHash.recover(_signature);
+        require(signer == _signer, "Wrong signature");
 
         // Users can only sign an NFT once
         require(!hasSignedNFT[_tokenContractAddress][_tokenID][signer], "Already signed by sender");
