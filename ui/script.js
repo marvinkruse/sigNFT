@@ -4,6 +4,8 @@
  * Example JavaScript code that interacts with the page and Web3 wallets
  */
 
+let jsonABI = JSON.parse(`[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"address[]","name":"_contractDelegates","type":"address[]"},{"internalType":"bool","name":"_whitelistAsDefault","type":"bool"}],"name":"activateTokenContract","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"}],"name":"activateWhitelist","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"address[]","name":"_contractDelegates","type":"address[]"}],"name":"addContractDelegates","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"},{"internalType":"address[]","name":"_whitelistedSigners","type":"address[]"}],"name":"addToWhiteList","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256[]","name":"_tokenIDs","type":"uint256[]"},{"internalType":"address[]","name":"_tokenDelegates","type":"address[]"}],"name":"addTokenDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"bool","name":"_whitelistAsDefault","type":"bool"}],"name":"changeWhitelistDefault","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"}],"name":"deactivateWhitelist","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"}],"name":"getSignatures","outputs":[{"internalType":"address[]","name":"signersOfToken","type":"address[]"},{"internalType":"bytes[]","name":"signaturesOfToken","type":"bytes[]"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"}],"name":"getSigners","outputs":[{"internalType":"address[]","name":"signersOfToken","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"address[]","name":"_contractDelegates","type":"address[]"}],"name":"removeContractDelegates","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"},{"internalType":"address[]","name":"_whitelistedSigners","type":"address[]"}],"name":"removeFromWhitelist","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256[]","name":"_tokenIDs","type":"uint256[]"},{"internalType":"address[]","name":"_tokenDelegates","type":"address[]"}],"name":"removeTokenDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_tokenContractAddress","type":"address"},{"internalType":"uint256","name":"_tokenID","type":"uint256"},{"internalType":"address","name":"_signer","type":"address"},{"internalType":"bytes","name":"_signature","type":"bytes"}],"name":"signNFT","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"}]`);
+
  // Unpkg imports
 const Web3Modal = window.Web3Modal.default;
 const WalletConnectProvider = window.WalletConnectProvider.default;
@@ -16,11 +18,10 @@ let web3Modal
 // Chosen wallet provider given by the dialog window
 let provider;
 
-
 // Address of the selected account
 let selectedAccount;
 
-
+const contractAddress = "0x123";
 /**
  * Setup the orchestra
  */
@@ -28,7 +29,6 @@ function init() {
 
   console.log("Initializing example");
   console.log("WalletConnectProvider is", WalletConnectProvider);
-  console.log("Fortmatic is", Fortmatic);
   console.log("window.web3 is", window.web3, "window.ethereum is", window.ethereum);
 
   // Check that the web page is run in a secure context,
@@ -48,16 +48,7 @@ function init() {
     walletconnect: {
       package: WalletConnectProvider,
       options: {
-        // Mikko's test key - don't copy as your mileage may vary
-        infuraId: "8043bb2cf99347b1bfadfb233c5325c0",
-      }
-    },
-
-    fortmatic: {
-      package: Fortmatic,
-      options: {
-        // Mikko's TESTNET api key
-        key: "pk_test_391E26A3B43A3350"
+        infuraId: "7669f8c3dc8a4b4d99196daf30d2c8eb",
       }
     }
   };
@@ -85,19 +76,19 @@ async function fetchAccountData() {
   // Get connected chain id from Ethereum node
   const chainId = await web3.eth.getChainId();
   // Load chain information over an HTTP API
-  const chainData = evmChains.getChain(chainId);
-  document.querySelector("#network-name").textContent = chainData.name;
+  //const chainData = evmChains.getChain(chainId);
+  //document.querySelector("#network-name").textContent = chainData.name;
 
   // Get list of accounts of the connected wallet
   const accounts = await web3.eth.getAccounts();
-
+  let sigNFTContract = new web3.eth.Contract(jsonABI, '0x9b1f7F645351AF3631a656421eD2e40f2802E6c0', null);
   // MetaMask does not give you all accounts, only the selected account
   console.log("Got accounts", accounts);
   selectedAccount = accounts[0];
 
   document.querySelector("#selected-account").textContent = selectedAccount;
 
-  // Get a handl
+  // Get a handle
   const template = document.querySelector("#template-balance");
   const accountContainer = document.querySelector("#accounts");
 
@@ -123,9 +114,24 @@ async function fetchAccountData() {
   // until data for all accounts is loaded
   await Promise.all(rowResolvers);
 
+  //let contractOwner = await sigNFTContract.methods.owner().call();
+  //document.querySelector("#owner-acc").textContent = contractOwner;
+
   // Display fully loaded UI for wallet data
   document.querySelector("#prepare").style.display = "none";
   document.querySelector("#connected").style.display = "block";
+  var msg = "This NFT (ID: " + 7 + ", Contract: " + "0x5b1869D9A4C187F2EAa108f3062412ecf0526b24".toLowerCase() + ") was signed by " + selectedAccount.toLowerCase() + " on sigNFT!";
+  web3.eth.personal.sign(msg, selectedAccount, function(err, res) {
+    if(!err) {
+      console.log(res)
+      web3.eth.personal.ecRecover(msg, res, function (err1, res2) {
+        console.log(res2 + "  " + err1)
+      });
+    } else {
+      console.log(err)
+    }
+  });
+
 }
 
 
