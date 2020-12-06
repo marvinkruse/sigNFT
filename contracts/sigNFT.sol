@@ -65,14 +65,21 @@ contract sigNFT is OwnableUpgradeable {
         // Check whether the signature matches and whether the signed message is correct, e.g.:
         // This NFT (ID: 18756, Contract: 0x0123012301012301230101230123010123012301) was signed by 0x5123012301012301230101230123010123012301 on sigNFT!
         // to protect from replaying the signature
-        bytes32 messageHash = keccak256(abi.encodePacked(
+        string memory signedMessage = string(abi.encodePacked(
             "This NFT (ID: ",
-            _tokenID, 
+            uintToString(_tokenID), 
             ", Contract: ", 
-            _tokenContractAddress, 
+            addressToString(_tokenContractAddress), 
             ") was signed by ", 
-            _signer, 
-            " on sigNFT!"));
+            addressToString(_signer), 
+            " on sigNFT!"
+        ));
+
+        bytes32 messageHash = keccak256(abi.encodePacked(
+            "\x19Ethereum Signed Message:\n",
+            uintToString(bytes(signedMessage).length),
+            signedMessage
+        ));
         address signer = messageHash.recover(_signature);
         require(signer == _signer, "SIGNFT/WRONG-SIGNATURE");
 
@@ -291,5 +298,38 @@ contract sigNFT is OwnableUpgradeable {
         for(uint256 i = 0; i < _tokenDelegates.length; i++) {
                 tokenDelegate[_tokenContractAddress][_tokenIDs[i]][_tokenDelegates[i]] = false;
         }
+    }
+
+    // From https://github.com/provable-things/ethereum-api/blob/master/oraclizeAPI_0.5.sol
+    function uintToString(uint256 _i) internal pure returns (string memory _uintAsString) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint256 j = _i;
+        uint256 len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint256 k = len - 1;
+        while (_i != 0) {
+            bstr[k--] = byte(uint8(48 + _i % 10));
+            _i /= 10;
+        }
+        return string(bstr);
+    }
+
+    function addressToString(address _address) internal pure returns(string memory) {
+       bytes32 _bytes = bytes32(uint256(_address));
+       bytes memory HEX = "0123456789abcdef";
+       bytes memory _string = new bytes(42);
+       _string[0] = '0';
+       _string[1] = 'x';
+       for(uint i = 0; i < 20; i++) {
+           _string[2+i*2] = HEX[uint8(_bytes[i + 12] >> 4)];
+           _string[3+i*2] = HEX[uint8(_bytes[i + 12] & 0x0f)];
+       }
+       return string(_string);
     }
 }
