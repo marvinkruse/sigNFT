@@ -62,9 +62,8 @@ contract sigNFT is OwnableUpgradeable {
     function signNFT(address _tokenContractAddress, uint256 _tokenID, address _signer, bytes memory _signature) public {
         IERC721 erc721 = IERC721(_tokenContractAddress);
 
-        // Check whether the signature matches and whether the signed message is correct, e.g.:
+        // Message that was signed conforms to this structure:
         // This NFT (ID: 18756, Contract: 0x0123012301012301230101230123010123012301) was signed by 0x5123012301012301230101230123010123012301 on sigNFT!
-        // to protect from replaying the signature
         string memory signedMessage = string(abi.encodePacked(
             "This NFT (ID: ",
             uintToString(_tokenID), 
@@ -75,11 +74,17 @@ contract sigNFT is OwnableUpgradeable {
             " on sigNFT!"
         ));
 
+        // Recreating the messagehash that was signed
+        // Sidenote: I am aware that bytes(str).length isn't perfect, but as the strings can only
+        // contain A-Z, a-z and 0-9 characters, it's always 1 byte = 1 characater, so it's fine
+        // in this case - and the most efficient
         bytes32 messageHash = keccak256(abi.encodePacked(
             "\x19Ethereum Signed Message:\n",
             uintToString(bytes(signedMessage).length),
             signedMessage
         ));
+
+        // Checking whether the signer matches the signature (signature is correct)
         address signer = messageHash.recover(_signature);
         require(signer == _signer, "SIGNFT/WRONG-SIGNATURE");
 
