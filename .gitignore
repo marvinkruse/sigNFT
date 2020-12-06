@@ -2,3 +2,4 @@ node_modules
 .openzeppelin
 build
 */.gitkeep
+*.DS_Store
