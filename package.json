@@ -21,6 +21,6 @@
     "@openzeppelin/cli": "^2.8.2",
     "@openzeppelin/contracts": "^3.3.0",
     "@openzeppelin/contracts-ethereum-package": "^3.0.0",
-    "@openzeppelin/contracts-upgradeable": "^3.3.0"
+    "@openzeppelin/contracts-upgradeable": "^4.7.2"
   }
 }
